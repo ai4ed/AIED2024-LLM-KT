@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: pykt-toolkit
+Version: 0.0.38
+Summary: pyKT: A Python Library to Benchmark Deep Learning based Knowledge Tracing Models
+Author: pykt-team
+Author-email: pykt.team@gmail.com
+Project-URL: Bug Tracker, https://github.com/pykt-team/pykt-toolkit/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.5
+Description-Content-Type: text/markdown
+
+pyKT: A Python Library to Benchmark Deep Learning based Knowledge Tracing Models
