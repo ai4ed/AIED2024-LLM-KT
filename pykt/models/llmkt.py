@@ -20,11 +20,11 @@ class Dim(IntEnum):
     seq = 1
     feature = 2
 
-class GPT4KT(nn.Module):
+class SPKT(nn.Module):
     def __init__(self, n_question, n_pid, 
             d_model, n_blocks, dropout, d_ff=256, 
             loss1=0.5, loss2=0.5, loss3=0.5, start=50, num_layers=2, nheads=4, seq_len=1024, 
-            kq_same=1, final_fc_dim=512, final_fc_dim2=256, num_attn_heads=8, separate_qa=False, l2=1e-5, emb_type="qid", emb_path="", pretrain_dim=768, cf_weight=0.3, t_weight=0.3, local_rank=1, num_sgap=None, c0=0, max_epoch=0):
+            kq_same=1, final_fc_dim=512, final_fc_dim2=256, num_attn_heads=8, separate_qa=False, l2=1e-5, emb_type="qid", emb_path="", pretrain_dim=768, cf_weight=0.3, t_weight=0.3, local_rank=1, num_sgap=None, c0=0, max_epoch=0, q_window_size=20, c_window_size=4):
         super().__init__()
         """
         Input:
@@ -34,7 +34,7 @@ class GPT4KT(nn.Module):
             d_ff : dimension for fully conntected net inside the basic block
             kq_same: if key query same, kq_same=1, else = 0
         """
-        self.model_name = "gpt4kt"
+        self.model_name = "spkt"
         print(f"model_name: {self.model_name}, emb_type: {emb_type}")
         self.n_question = n_question
         self.dropout = dropout
@@ -44,21 +44,42 @@ class GPT4KT(nn.Module):
         self.model_type = self.model_name
         self.separate_qa = separate_qa
         self.emb_type = emb_type
-        self.ce_loss = CrossEntropyLoss()
+        self.ce_loss = BCELoss()
         self.cf_weight = cf_weight
         self.t_weight = t_weight
         self.num_sgap = num_sgap
+        self.q_window_size = q_window_size
+        self.c_window_size = c_window_size
+        # print(f"q_window_size:{self.q_window_size}")
+        # print(f"c_window_size:{self.c_window_size}")
+
         
         self.embed_l = d_model
 
-        self.que_emb = nn.Embedding(self.n_pid+1, self.embed_l)#question embeding
-        self.concept_emb = nn.Parameter(torch.randn(self.n_question+1, self.embed_l).to(device), requires_grad=True)#concept embeding
+        self.dataset_emb = nn.Embedding(20,self.embed_l).to(device)# dataset_id embedding
 
         self.qa_embed = nn.Embedding(2, self.embed_l)
         
         if self.emb_type.find("pt") != -1:
             self.time_emb = nn.Embedding(self.num_sgap+1, self.embed_l)
         # Architecture Object. It contains stack of attention block
+
+        # self.emb_q = nn.Sequential(
+        #     nn.Linear(1, 200000), nn.ReLU(), nn.Dropout(self.dropout),
+        #     nn.Linear(200000,d_model)
+        # )
+
+        self.emb_q = nn.Embedding(200000,self.embed_l).to(device)# question embedding
+
+        
+        # self.emb_c = nn.Sequential(
+        #     nn.Linear(7,1000), nn.ReLU(), nn.Dropout(self.dropout), # 7表示一个问题最大的concept数量
+        #     nn.Linear(1000,d_model)
+        # )
+
+        self.emb_c = nn.Parameter(torch.randn(1000, self.embed_l).to(device), requires_grad=True)# kc embedding
+
+
         self.model = Architecture(n_question=n_question, n_blocks=n_blocks, n_heads=num_attn_heads, dropout=dropout,
                                     d_model=d_model, d_feature=d_model / num_attn_heads, d_ff=d_ff,  kq_same=self.kq_same, model_type=self.model_type, seq_len=seq_len)
 
@@ -98,7 +119,7 @@ class GPT4KT(nn.Module):
         # add zero for padding
         concept_emb_cat = torch.cat(
             [torch.zeros(1, self.embed_l).to(device), 
-            self.concept_emb], dim=0)
+            self.emb_c], dim=0)
         # shift c
 
         related_concepts = (c+1).long()
@@ -116,34 +137,78 @@ class GPT4KT(nn.Module):
     def forward(self, dcur, qtest=False, train=False, dgaps=None):
         q, c, r = dcur["qseqs"].long().to(device), dcur["cseqs"].long().to(device), dcur["rseqs"].long().to(device)
         qshft, cshft, rshft = dcur["shft_qseqs"].long().to(device), dcur["shft_cseqs"].long().to(device), dcur["shft_rseqs"].long().to(device)
-        pid_data = torch.cat((q[:,0:1], qshft), dim=1)
-        q_data = torch.cat((c[:,0:1], cshft), dim=1)
+        # print(f"q:{q.shape}")
+        batch_size = q.size(0)
+
+        dataset_id = dcur["dataset_id"].long().to(device)
+        pid_data = torch.cat((q[:,0:1], qshft), dim=1) # shape[batch,200]
+        q_data = torch.cat((c[:,0:1], cshft), dim=1) # shape[batch,200,7]
         target = torch.cat((r[:,0:1], rshft), dim=1)
-        # print(f"pid_data:{pid_data}")
-        emb_q = self.que_emb(pid_data)#[batch,max_len-1,emb_size]
-        emb_c = self.get_avg_skill_emb(q_data)#[batch,max_len-1,emb_size]
-        q_embed_data = emb_q + emb_c
+
+        if self.emb_type.find("aug") != -1 and train:
+            # new qids
+            aug_pids= pid_data.unfold(1, self.q_window_size, 1)
+            aug_pids = aug_pids.sum(dim=2)
+            aug_pid_data = torch.where(aug_pids >= 200000, -1, aug_pids)
+
+            # new cids
+            if q_data.size(2) <  self.c_window_size:
+                aug_cids = q_data.unfold(2, q_data.size(2), 1).sum(dim=-1)
+            else:
+                aug_cids = q_data.unfold(2, self.c_window_size, 1).sum(dim=-1)
+            aug_cid_data = torch.where(aug_cids >= 1000, -1, aug_cids)
+            # print(f"aug_cid_data:{aug_cid_data.shape}")
+
+            # new rids
+            window_counts = target.unfold(1, self.q_window_size, 1).sum(dim=2)
+            aug_target_data = (window_counts > self.q_window_size / 2).float().long()
+
+            # padding
+            pad_dims = [0, pid_data.size(1) - aug_pid_data.size(1), 0, pid_data.size(0) - aug_pid_data.size(0)]
+            tmp_aug_pid_data_padded = F.pad(aug_pid_data, pad_dims, value=-1)
+            aug_pid_data_padded = torch.where(tmp_aug_pid_data_padded == -1, 0, tmp_aug_pid_data_padded)
+            # print(f"aug_pid_data_padded:{aug_pid_data_padded.shape}")
+            cid_padding_size = q_data.size(2) - aug_cid_data.size(2)
+            aug_cid_data_padded = F.pad(aug_cid_data, (0, cid_padding_size))
+            # print(f"aug_cid_data_padded:{aug_cid_data_padded.shape}")
+            aug_target_data = F.pad(aug_target_data, pad_dims, value=0)
+
+            # stack data
+            all_pid_data = torch.cat([pid_data, aug_pid_data_padded],dim=0)
+            # print(f"all_pid_data:{torch.max(all_pid_data)}")
+            all_cid_data = torch.cat([q_data, aug_cid_data_padded],dim=0)
+            # print(f"all_cid_data:{torch.max(all_cid_data)}")
+            all_target_data = torch.cat([target, aug_target_data],dim=0)
+            # print(f"all_target_data:{torch.max(all_target_data)}")
+
+            # embedding
+            emb_q = self.emb_q(all_pid_data) #[batch,max_len-1,emb_size]
+            emb_c = self.get_avg_skill_emb(all_cid_data) #[batch,max_len-1,emb_size]
+            dataset_embed_data = self.dataset_emb(dataset_id).unsqueeze(1).repeat(2,1,1)
+            qa_embed_data = self.qa_embed(all_target_data)
+        else:
+            emb_q = self.emb_q(pid_data)#[batch,max_len-1,emb_size]
+            emb_c = self.get_avg_skill_emb(q_data)#[batch,max_len-1,emb_size]
+            dataset_embed_data = self.dataset_emb(dataset_id).unsqueeze(1)
+            # print(f"dataset_embed_data:{dataset_embed_data.shape}")
+            try:
+                qa_embed_data = self.qa_embed(target)
+            except:
+                print(f"target:{target}")
         
-        # # Batch First
-        # if pid_data.size(1) == 0:
-        #     pid_data,q_data = q_data, pid_data
-        # _, emb_qca, emb_qc, emb_q, emb_c = self.que_emb(pid_data, q_data, target)
-        # if q_data.size(1) == 0:
-        #     q_embed_data = emb_q
-        # else:
-        #     q_embed_data = emb_q + emb_c
-        # # print(f"emb_q:{emb_q.shape}")
         if self.emb_type.find("pt") != -1:
             sg, sgshft = dgaps["sgaps"].long(), dgaps["shft_sgaps"].long()
             s_gaps = torch.cat((sg[:, 0:1], sgshft), dim=1)
             emb_t = self.time_emb(s_gaps)
             q_embed_data += emb_t
-        qa_embed_data = self.qa_embed(target)
+        
+        # print(f"emb_q:{emb_q.shape}")
+        # print(f"emb_c:{emb_c.shape}")
+        # print(f"dataset_embed_data:{dataset_embed_data.shape}")
+        q_embed_data = emb_q + emb_c + dataset_embed_data
         qa_embed_data = q_embed_data + qa_embed_data
 
         # BS.seqlen,d_model
-        # Pass to the decoder
-        # output shape BS,seqlen,d_model or d_model//2
         y2, y3 = 0, 0
         d_output = self.model((q_embed_data, qa_embed_data))
         concat_q = torch.cat([d_output, q_embed_data], dim=-1)
@@ -179,7 +244,20 @@ class GPT4KT(nn.Module):
             # t_loss = mse_loss(ty.double(), tt.double())
             # print(f"t_loss:{t_loss}")
             cl_losses += self.t_weight * t_loss
-            
+        if self.emb_type.find("aug") != -1 and train:
+            # cal loss of augmented data
+            aug_preds = preds[batch_size:]
+            # 拆分预测结果
+            preds = preds[:batch_size]
+
+            mask_select = tmp_aug_pid_data_padded != -1
+            select_preds = aug_preds[mask_select]
+            select_targets = aug_target_data[mask_select]
+            # print(f"select_preds:{torch.max(select_preds)}")
+            # print(f"select_targets:{torch.max(select_targets)}")
+            cl_losses = self.ce_loss(select_preds, select_targets.float())
+            # print(f"cl_losses:{cl_losses}")
+  
         if train:
             if self.emb_type == "qid":
                 return preds, y2, y3
@@ -204,7 +282,7 @@ class Architecture(nn.Module):
         self.d_model = d_model
         self.model_type = model_type
 
-        if model_type in {'gpt4kt'}:
+        if model_type in {'gpt4kt','spkt'}:
             self.blocks_2 = nn.ModuleList([
                 TransformerLayer(d_model=d_model, d_feature=d_model // n_heads,
                                  d_ff=d_ff, dropout=dropout, n_heads=n_heads, kq_same=kq_same)

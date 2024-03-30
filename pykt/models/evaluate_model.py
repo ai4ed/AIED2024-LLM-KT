@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch import nn
-from torch.nn.functional import one_hot
+from torch.nn.functional import one_hot, binary_cross_entropy
 from sklearn import metrics
 from pykt.config import que_type_models
 import pandas as pd
@@ -103,7 +103,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 dcur, dgaps = data
             elif model_name in ["bakt_time"]:
                 dcur, dgaps = data
-            elif model_name in ["gpt4kt"] and model.emb_type.find("pt") != -1:
+            elif model_name in ["gpt4kt","spkt"] and model.emb_type.find("pt") != -1:
                 dcur, dgaps = data
             else:
                 dcur = data
@@ -111,7 +111,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
             qshft, cshft, rshft = dcur["shft_qseqs"], dcur["shft_cseqs"], dcur["shft_rseqs"]
             m, sm = dcur["masks"], dcur["smasks"]
             q, c, r, qshft, cshft, rshft, m, sm = q.to(device), c.to(device), r.to(device), qshft.to(device), cshft.to(device), rshft.to(device), m.to(device), sm.to(device)
-            if model.model_name in que_type_models and model.model_name not in ["lpkt", "gnn4kt", "gpt4kt"]:
+            if model.model_name in que_type_models and model.model_name not in ["lpkt", "gnn4kt", "gpt4kt","spkt"]:
                 model.module.eval()
             else:
                 model.eval()
@@ -153,7 +153,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 else:
                     y = model(dcur, attn_cnt_path=attn_cnt_path)
                 y = y[:,1:]
-            elif model_name in ["gpt4kt"]:
+            elif model_name in ["gpt4kt","spkt"]:
                 if model.emb_type.find("pt") != -1:
                     y = model(dcur, dgaps=dgaps)
                 else:
@@ -201,7 +201,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 # csm = torch.cat((dcur["smasks"][:,0:1], dcur["smasks"]), dim=1)
                 y = model(cc.long(), cq.long(), ct.long(), cr.long())#, csm.long())
                 y = y[:, 1:]
-            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt"]:
+            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt","spkt"]:
                 y = model.module.predict_one_step(data)
                 c,cshft = q,qshft#question level 
             # print(f"after y: {y.shape}")
@@ -252,7 +252,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 dcur, dgaps = data
             elif model_name in ["bakt_time"]:
                 dcur, dgaps = data
-            elif model_name in ["gpt4kt"] and model.module.emb_type.find("pt") != -1:
+            elif model_name in ["gpt4kt","spkt"] and model.module.emb_type.find("pt") != -1:
                 dcur, dgaps = data
             else:
                 dcur = data
@@ -260,7 +260,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
             qshft, cshft, rshft = dcur["shft_qseqs"], dcur["shft_cseqs"], dcur["shft_rseqs"]
             m, sm = dcur["masks"], dcur["smasks"]
             q, c, r, qshft, cshft, rshft, m, sm = q.to(device), c.to(device), r.to(device), qshft.to(device), cshft.to(device), rshft.to(device), m.to(device), sm.to(device)
-            if model.module.model_name in que_type_models and model.module.model_name not in ["lpkt", "gnn4kt", "gpt4kt"]:
+            if model.module.model_name in que_type_models and model.module.model_name not in ["lpkt", "gnn4kt", "gpt4kt","spkt"]:
                 model.module.eval()
             else:
                 model.module.eval()
@@ -302,7 +302,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 else:
                     y = model(dcur, attn_cnt_path=attn_cnt_path)
                 y = y[:,1:]
-            elif model_name in ["gpt4kt"]:
+            elif model_name in ["gpt4kt","spkt"]:
                 if model.module.emb_type.find("pt") != -1:
                     y = model(dcur, dgaps=dgaps)
                 else:
@@ -350,7 +350,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 # csm = torch.cat((dcur["smasks"][:,0:1], dcur["smasks"]), dim=1)
                 y = model(cc.long(), cq.long(), ct.long(), cr.long())#, csm.long())
                 y = y[:, 1:]
-            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt"]:
+            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt","spkt"]:
                 y = model.module.predict_one_step(data)
                 c,cshft = q,qshft#question level 
             # print(f"after y: {y.shape}")
@@ -367,9 +367,10 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
             y = torch.masked_select(y, sm).detach().cpu()
             # print(f"pred_results:{y}")  
             t = torch.masked_select(rshft, sm).detach().cpu()
+            loss = binary_cross_entropy(y.double(), t.double())
 
             y_trues.append(t.numpy())
-            y_scores.append(y.numpy())
+            y_scores.append(y.float().numpy())
             test_mini_index+=1
         ts = np.concatenate(y_trues, axis=0)
         ps = np.concatenate(y_scores, axis=0)
@@ -382,7 +383,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 json.dump(dic_emb, f)
     # if save_path != "":
     #     pd.to_pickle(dres, save_path+".pkl")
-    return auc, acc
+    return auc, acc, loss
 
 def early_fusion(curhs, model, model_name):
     if model_name in ["dkvmn","skvmn"]:

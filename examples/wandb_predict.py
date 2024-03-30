@@ -18,7 +18,7 @@ def main(params):
     if params['use_wandb'] ==1:
         import wandb
         os.environ['WANDB_API_KEY'] = wandb_config["api_key"]
-        wandb.init(project="wandb_predict")
+        wandb.init(project=params['project_name'])
 
     save_dir, batch_size, fusion_type = params["save_dir"], params["bz"], params["fusion_type"].split(",")
     win200 = params["win200"]
@@ -52,7 +52,7 @@ def main(params):
 
     with open("../configs/data_config.json") as fin:
         curconfig = copy.deepcopy(json.load(fin))
-        if model_name in ["gpt4kt"]:
+        if model_name in ["gpt4kt","llmkt"]:
             dataset_name = params["dataset_name"]
         data_config = curconfig[dataset_name]
         data_config["dataset_name"] = dataset_name
@@ -64,11 +64,12 @@ def main(params):
             print("running  prediction")
             data_config["num_at"] = config["data_config"]["num_at"]
             data_config["num_it"] = config["data_config"]["num_it"] 
-        elif model_name in ["gpt4kt"]:
+        elif model_name in ["gpt4kt","llmkt"]:
             data_config["num_q"] = config["data_config"]["num_q"]
             data_config["num_c"] = config["data_config"]["num_c"] 
-            
-    test_loader, test_window_loader, test_question_loader, test_question_window_loader = init_test_datasets(data_config, model_name, batch_size,fold,win200)
+    
+    dataet_name = args.dataset_name
+    test_loader, test_window_loader, test_question_loader, test_question_window_loader = init_test_datasets(data_config, model_name, batch_size, fold, win200)
 
     print(f"Start predicting model: {model_name}, embtype: {emb_type}, save_dir: {save_dir}, dataset_name: {dataset_name}")
     print(f"model_config: {model_config}")
@@ -77,13 +78,13 @@ def main(params):
     if model_name in ["stosakt"]:
         model = load_model(model_name, model_config, data_config, emb_type, save_dir, train_args)
     else:
-        for remove_item in ['use_wandb','learning_rate','add_uuid','l2','global_bs','num_gpus','pretrain_path']:
+        for remove_item in ['use_wandb','learning_rate','add_uuid','l2','global_bs','num_gpus','pretrain_path', "num_workers","pretrain_epoch","load_finetune","project_name"]:
             if remove_item in model_config:
                 del model_config[remove_item]
         if params["load_finetune"] == "1":
             model = load_model(model_name, model_config, data_config, emb_type, save_dir, mode="test", finetune=False)
         else:
-            model = load_model(model_name, model_config, data_config, emb_type, save_dir, mode="test")
+            model = load_model(model_name, model_config, data_config, emb_type, save_dir ,args, mode="test")
 
     testauc, testacc = -1, -1
 
@@ -107,7 +108,7 @@ def main(params):
         # print(f"testauc: {testauc}, testacc: {testacc}, window_testauc: {window_testauc}, window_testacc: {window_testacc}")
         print(f"window_testauc: {window_testauc}, window_testacc: {window_testacc}")
     
-    if model_name in ["gpt4kt"]:
+    if model_name in ["gpt4kt","llmkt"]:
         save_test_window_path = os.path.join(save_dir, model.emb_type+"_test_window_predictions_pretrain.txt")
         window_testauc, window_testacc = evaluate_testset(model, test_window_loader, model_name, save_test_window_path, dataset_name, fold)
         # print(f"testauc: {testauc}, testacc: {testacc}, window_testauc: {window_testauc}, window_testacc: {window_testacc}")
@@ -159,10 +160,13 @@ if __name__ == "__main__":
     parser.add_argument("--use_wandb", type=int, default=1)
     parser.add_argument("--dataset_name", type=str, default="algebra2005")
     parser.add_argument("--win200", type=bool, default=True)
+    parser.add_argument("--sebset_id", type=int,default=0)
+    # parser.add_argument("--pretrain_epoch", type=int, default=0)
     parser.add_argument("--load_finetune", type=str, default="0")
-
-    parser.add_argument("--local-rank", type=int)
-
+    parser.add_argument("--project_name", type=str, default="llmkt_predict")
+    parser.add_argument("--local_rank", type=int)
+    parser.add_argument("--num_workers", type=int, default=1)
+    parser.add_argument("--pretrain_epoch", type=int, default=None)
     args = parser.parse_args()
     print(args)
     params = vars(args)

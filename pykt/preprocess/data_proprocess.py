@@ -1,6 +1,7 @@
 import os, sys
 
-def process_raw_data(dataset_name,dname2paths):
+
+def process_raw_data(dataset_name, dname2paths):
     readf = dname2paths[dataset_name]
     dname = "/".join(readf.split("/")[0:-1])
     writef = os.path.join(dname, "data.txt")
@@ -27,24 +28,30 @@ def process_raw_data(dataset_name,dname2paths):
         from .assist2017_preprocess import read_data_from_csv
     elif dataset_name == "junyi2015":
         from .junyi2015_preprocess import read_data_from_csv, load_q2c
-    elif dataset_name in ["ednet","ednet5w"]:
+    elif dataset_name in ["ednet", "ednet5w", "ednet_all"]:
         from .ednet_preprocess import read_data_from_csv
     elif dataset_name == "peiyou":
         from .aaai2022_competition import read_data_from_csv, load_q2c
-    
+
     if dataset_name == "junyi2015":
-        dq2c = load_q2c(readf.replace("junyi_ProblemLog_original.csv","junyi_Exercise_table.csv"))
+        dq2c = load_q2c(
+            readf.replace("junyi_ProblemLog_original.csv", "junyi_Exercise_table.csv")
+        )
         read_data_from_csv(readf, writef, dq2c)
     elif dataset_name == "peiyou":
         fname = readf.split("/")[-1]
-        dq2c = load_q2c(readf.replace(fname,"questions.json"))
+        dq2c = load_q2c(readf.replace(fname, "questions.json"))
         read_data_from_csv(readf, writef, dq2c)
+    elif dataset_name == "ednet":
+        dname, writef = read_data_from_csv(readf, writef, dataset_name=dataset_name)
     elif dataset_name == "ednet5w":
         dname, writef = read_data_from_csv(readf, writef, dataset_name=dataset_name)
-    elif dataset_name != "nips_task34":#default case
+    elif dataset_name == "ednet_all":
+        dname, writef = read_data_from_csv(readf, writef, dataset_name=dataset_name)
+    elif dataset_name != "nips_task34":  # default case
         read_data_from_csv(readf, writef)
     else:
         metap = os.path.join(dname, "metadata")
         read_data_from_csv(readf, metap, "task_3_4", writef)
-     
-    return dname,writef
+
+    return dname, writef

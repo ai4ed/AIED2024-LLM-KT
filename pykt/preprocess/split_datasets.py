@@ -5,8 +5,21 @@ import numpy as np
 import json
 import copy
 
-ALL_KEYS = ["fold", "uid", "questions", "concepts", "responses", "timestamps",
-            "usetimes", "selectmasks", "is_repeat", "qidxs", "rest", "orirow", "cidxs"]
+ALL_KEYS = [
+    "fold",
+    "uid",
+    "questions",
+    "concepts",
+    "responses",
+    "timestamps",
+    "usetimes",
+    "selectmasks",
+    "is_repeat",
+    "qidxs",
+    "rest",
+    "orirow",
+    "cidxs",
+]
 ONE_KEYS = ["fold", "uid"]
 
 
@@ -24,7 +37,10 @@ def read_data(fname, min_seq_len=3, response_set=[0, 1]):
             if i % 6 == 0:  # stuid
                 effective_keys.add("uid")
                 tmps = line.split(",")
-                stuid, seq_len = tmps[0], int(tmps[1])
+                if "(" in tmps[0]:
+                    stuid, seq_len = tmps[0].replace("(", ""), int(tmps[2])
+                else:
+                    stuid, seq_len = tmps[0], int(tmps[1])
                 if seq_len < min_seq_len:  # delete use seq len less than min_seq_len
                     i += 6
                     dcur = dict()
@@ -91,7 +107,8 @@ def read_data(fname, min_seq_len=3, response_set=[0, 1]):
             i += 1
     df = pd.DataFrame(dres)
     print(
-        f"delete bad stu num of len: {delstu}, delete interactions: {delnum}, of r: {badr}, good num: {goodnum}")
+        f"delete bad stu num of len: {delstu}, delete interactions: {delnum}, of r: {badr}, good num: {goodnum}"
+    )
     return df, effective_keys
 
 
@@ -116,10 +133,10 @@ def extend_multi_concepts(df, effective_keys):
                 for key in extend_keys:
                     if key != "concepts":
                         dextend_res.setdefault(key, [])
-                        dextend_res[key].extend(
-                            [dextend_infos[key][i]] * len(ids))
+                        dextend_res[key].extend([dextend_infos[key][i]] * len(ids))
                 dextend_res["is_repeat"].extend(
-                    ["0"] + ["1"] * (len(ids) - 1))  # 1: repeat, 0: original
+                    ["0"] + ["1"] * (len(ids) - 1)
+                )  # 1: repeat, 0: original
             else:
                 for key in extend_keys:
                     dextend_res.setdefault(key, [])
@@ -166,8 +183,7 @@ def train_test_split(df, test_ratio=0.2):
     train_df = df[0:train_num]
     test_df = df[train_num:]
     # report
-    print(
-        f"total num: {datanum}, train+valid num: {train_num}, test num: {test_num}")
+    print(f"total num: {datanum}, train+valid num: {train_num}, test num: {test_num}")
     return train_df, test_df
 
 
@@ -221,7 +237,7 @@ def generate_sequences(df, effective_keys, min_seq_len=3, maxlen=200, pad_val=-1
                 dres.setdefault(key, [])
                 if key not in ONE_KEYS:
                     # [str(k) for k in dcur[key][j: j + maxlen]]))
-                    dres[key].append(",".join(dcur[key][j: j + maxlen]))
+                    dres[key].append(",".join(dcur[key][j : j + maxlen]))
                 else:
                     dres[key].append(dcur[key])
             dres["selectmasks"].append(",".join(["1"] * maxlen))
@@ -236,12 +252,12 @@ def generate_sequences(df, effective_keys, min_seq_len=3, maxlen=200, pad_val=-1
             dres.setdefault(key, [])
             if key not in ONE_KEYS:
                 paded_info = np.concatenate(
-                    [dcur[key][j:], np.array([pad_val] * pad_dim)])
+                    [dcur[key][j:], np.array([pad_val] * pad_dim)]
+                )
                 dres[key].append(",".join([str(k) for k in paded_info]))
             else:
                 dres[key].append(dcur[key])
-        dres["selectmasks"].append(
-            ",".join(["1"] * rest + [str(pad_val)] * pad_dim))
+        dres["selectmasks"].append(",".join(["1"] * rest + [str(pad_val)] * pad_dim))
 
     # after preprocess data, report
     dfinal = dict()
@@ -264,32 +280,36 @@ def generate_window_sequences(df, effective_keys, maxlen=200, pad_val=-1):
                 dres.setdefault(key, [])
                 if key not in ONE_KEYS:
                     # [str(k) for k in dcur[key][0: maxlen]]))
-                    dres[key].append(",".join(dcur[key][0: maxlen]))
+                    dres[key].append(",".join(dcur[key][0:maxlen]))
                 else:
                     dres[key].append(dcur[key])
             dres["selectmasks"].append(",".join(["1"] * maxlen))
-            for j in range(maxlen+1, lenrs+1):
+            for j in range(maxlen + 1, lenrs + 1):
                 for key in effective_keys:
                     dres.setdefault(key, [])
                     if key not in ONE_KEYS:
-                        dres[key].append(",".join([str(k)
-                                         for k in dcur[key][j-maxlen: j]]))
+                        dres[key].append(
+                            ",".join([str(k) for k in dcur[key][j - maxlen : j]])
+                        )
                     else:
                         dres[key].append(dcur[key])
                 dres["selectmasks"].append(
-                    ",".join([str(pad_val)] * (maxlen - 1) + ["1"]))
+                    ",".join([str(pad_val)] * (maxlen - 1) + ["1"])
+                )
         else:
             for key in effective_keys:
                 dres.setdefault(key, [])
                 if key not in ONE_KEYS:
                     pad_dim = maxlen - lenrs
                     paded_info = np.concatenate(
-                        [dcur[key][0:], np.array([pad_val] * pad_dim)])
+                        [dcur[key][0:], np.array([pad_val] * pad_dim)]
+                    )
                     dres[key].append(",".join([str(k) for k in paded_info]))
                 else:
                     dres[key].append(dcur[key])
             dres["selectmasks"].append(
-                ",".join(["1"] * lenrs + [str(pad_val)] * pad_dim))
+                ",".join(["1"] * lenrs + [str(pad_val)] * pad_dim)
+            )
 
     dfinal = dict()
     for key in ALL_KEYS:
@@ -306,13 +326,12 @@ def get_inter_qidx(df):
     bias = 0
     inter_num = 0
     for _, row in df.iterrows():
-        ids_list = [str(x+bias)
-                    for x in range(len(row['responses'].split(',')))]
+        ids_list = [str(x + bias) for x in range(len(row["responses"].split(",")))]
         inter_num += len(ids_list)
         ids = ",".join(ids_list)
         qidx_ids.append(ids)
         bias += len(ids_list)
-    assert inter_num-1 == int(ids_list[-1])
+    assert inter_num - 1 == int(ids_list[-1])
 
     return qidx_ids
 
@@ -328,7 +347,7 @@ def add_qidx(dcur, global_qidx):
     # print(f"idxs: {idxs}")
     # print("="*20)
     for i in range(0, len(idxs)):
-        rests.append(idxs[i+1:].count(idxs[i]))
+        rests.append(idxs[i + 1 :].count(idxs[i]))
     return idxs, rests, global_qidx
 
 
@@ -342,7 +361,7 @@ def expand_question(dcur, global_qidx, pad_val=-1):
             for key in dcur.keys():
                 if key in ONE_KEYS:
                     continue
-                dlast[key] = dcur[key][0: i]
+                dlast[key] = dcur[key][0:i]
         if i == 0:
             for key in dcur.keys():
                 if key in ONE_KEYS:
@@ -367,20 +386,20 @@ def expand_question(dcur, global_qidx, pad_val=-1):
             elif len(dlast["responses"]) == 0:  # the first question
                 dextend["selectmasks"].append([pad_val])
             else:
-                dextend["selectmasks"].append(
-                    len(dlast["responses"]) * [pad_val] + [1])
+                dextend["selectmasks"].append(len(dlast["responses"]) * [pad_val] + [1])
 
         last = str(repeats[i])
 
     return dextend, global_qidx
 
 
-def generate_question_sequences(df, effective_keys, window=True, min_seq_len=3, maxlen=200, pad_val=-1):
+def generate_question_sequences(
+    df, effective_keys, window=True, min_seq_len=3, maxlen=200, pad_val=-1
+):
     if "questions" not in effective_keys or "concepts" not in effective_keys:
         print(f"has no questions or concepts, has no question sequences!")
         return False, None
-    save_keys = list(effective_keys) + \
-        ["selectmasks", "qidxs", "rest", "orirow"]
+    save_keys = list(effective_keys) + ["selectmasks", "qidxs", "rest", "orirow"]
     dres = {}  # "selectmasks": []}
     global_qidx = -1
     df["index"] = list(range(0, df.shape[0]))
@@ -397,9 +416,10 @@ def generate_question_sequences(df, effective_keys, window=True, min_seq_len=3, 
             if curlen < maxlen:
                 for key in dexpand:
                     pad_dim = maxlen - curlen
-#                     print(key, j, len(dexpand[key]))
+                    #                     print(key, j, len(dexpand[key]))
                     paded_info = np.concatenate(
-                        [dexpand[key][j][0:], np.array([pad_val] * pad_dim)])
+                        [dexpand[key][j][0:], np.array([pad_val] * pad_dim)]
+                    )
                     dres.setdefault(key, [])
                     dres[key].append(",".join([str(k) for k in paded_info]))
                 for key in ONE_KEYS:
@@ -408,25 +428,33 @@ def generate_question_sequences(df, effective_keys, window=True, min_seq_len=3, 
             else:
                 # window
                 if window:
-                    if dexpand["selectmasks"][j][maxlen-1] == 1:
+                    if dexpand["selectmasks"][j][maxlen - 1] == 1:
                         for key in dexpand:
                             dres.setdefault(key, [])
                             dres[key].append(
-                                ",".join([str(k) for k in dexpand[key][j][0:maxlen]]))
+                                ",".join([str(k) for k in dexpand[key][j][0:maxlen]])
+                            )
                         for key in ONE_KEYS:
                             dres.setdefault(key, [])
                             dres[key].append(dcur[key])
 
-                    for n in range(maxlen+1, curlen+1):
-                        if dexpand["selectmasks"][j][n-1] == 1:
+                    for n in range(maxlen + 1, curlen + 1):
+                        if dexpand["selectmasks"][j][n - 1] == 1:
                             for key in dexpand:
                                 dres.setdefault(key, [])
                                 if key == "selectmasks":
                                     dres[key].append(
-                                        ",".join([str(pad_val)] * (maxlen - 1) + ["1"]))
+                                        ",".join([str(pad_val)] * (maxlen - 1) + ["1"])
+                                    )
                                 else:
                                     dres[key].append(
-                                        ",".join([str(k) for k in dexpand[key][j][n-maxlen: n]]))
+                                        ",".join(
+                                            [
+                                                str(k)
+                                                for k in dexpand[key][j][n - maxlen : n]
+                                            ]
+                                        )
+                                    )
                             for key in ONE_KEYS:
                                 dres.setdefault(key, [])
                                 dres[key].append(dcur[key])
@@ -440,7 +468,13 @@ def generate_question_sequences(df, effective_keys, window=True, min_seq_len=3, 
                             for key in dexpand:
                                 dres.setdefault(key, [])
                                 dres[key].append(
-                                    ",".join([str(s) for s in dexpand[key][j][k: k + maxlen]]))
+                                    ",".join(
+                                        [
+                                            str(s)
+                                            for s in dexpand[key][j][k : k + maxlen]
+                                        ]
+                                    )
+                                )
                             for key in ONE_KEYS:
                                 dres.setdefault(key, [])
                                 dres[key].append(dcur[key])
@@ -451,9 +485,9 @@ def generate_question_sequences(df, effective_keys, window=True, min_seq_len=3, 
                     for key in dexpand:
                         dres.setdefault(key, [])
                         paded_info = np.concatenate(
-                            [dexpand[key][j][k:], np.array([pad_val] * pad_dim)])
-                        dres[key].append(",".join([str(s)
-                                         for s in paded_info]))
+                            [dexpand[key][j][k:], np.array([pad_val] * pad_dim)]
+                        )
+                        dres[key].append(",".join([str(s) for s in paded_info]))
                     for key in ONE_KEYS:
                         dres.setdefault(key, [])
                         dres[key].append(dcur[key])
@@ -473,7 +507,18 @@ def save_id2idx(dkeyid2idx, save_path):
         fout.write(json.dumps(dkeyid2idx))
 
 
-def write_config(dataset_name, dkeyid2idx, effective_keys, configf, dpath, k=5, min_seq_len=3, maxlen=200, flag=False, other_config={}):
+def write_config(
+    dataset_name,
+    dkeyid2idx,
+    effective_keys,
+    configf,
+    dpath,
+    k=5,
+    min_seq_len=3,
+    maxlen=200,
+    flag=False,
+    other_config={},
+):
     input_type, num_q, num_c = [], 0, 0
     if "questions" in effective_keys:
         input_type.append("questions")
@@ -496,7 +541,7 @@ def write_config(dataset_name, dkeyid2idx, effective_keys, configf, dpath, k=5, 
         "folds": folds,
         "test_original_file": "test.csv",
         "test_file": "test_sequences.csv",
-        "test_window_file": "test_window_sequences.csv"
+        "test_window_file": "test_window_sequences.csv",
     }
     dconfig.update(other_config)
     if flag:
@@ -543,8 +588,7 @@ def calStatistics(df, stares, key):
             qs = row["questions"].split(",")
             curqs = set(qs) - {"-1"}
             allqs |= curqs
-    stares.append(",".join([str(s)
-                  for s in [key, allin, df.shape[0], allselect]]))
+    stares.append(",".join([str(s) for s in [key, allin, df.shape[0], allselect]]))
     return allin, allselect, len(allqs), len(allcs), df.shape[0]
 
 
@@ -581,25 +625,24 @@ def main(dname, fname, dataset_name, configf, min_seq_len=3, maxlen=200, kfold=5
 
     total_df, effective_keys = read_data(fname)
     # cal max_concepts
-    if 'concepts' in effective_keys:
+    if "concepts" in effective_keys:
         max_concepts = get_max_concepts(total_df)
     else:
         max_concepts = -1
 
     oris, _, qs, cs, seqnum = calStatistics(total_df, stares, "original")
-    print("="*20)
-    print(
-        f"original total interactions: {oris}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
+    print("=" * 20)
+    print(f"original total interactions: {oris}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
 
     total_df, effective_keys = extend_multi_concepts(total_df, effective_keys)
     total_df, dkeyid2idx = id_mapping(total_df)
     dkeyid2idx["max_concepts"] = max_concepts
 
-    extends, _, qs, cs, seqnum = calStatistics(
-        total_df, stares, "extend multi")
-    print("="*20)
+    extends, _, qs, cs, seqnum = calStatistics(total_df, stares, "extend multi")
+    print("=" * 20)
     print(
-        f"after extend multi, total interactions: {extends}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
+        f"after extend multi, total interactions: {extends}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
 
     save_id2idx(dkeyid2idx, os.path.join(dname, "keyid2idx.json"))
     effective_keys.add("fold")
@@ -612,70 +655,89 @@ def main(dname, fname, dataset_name, configf, min_seq_len=3, maxlen=200, kfold=5
     splitdf = KFold_split(train_df, kfold)
     # TODO
     splitdf[config].to_csv(os.path.join(dname, "train_valid.csv"), index=None)
-    ins, ss, qs, cs, seqnum = calStatistics(
-        splitdf, stares, "original train+valid")
+    ins, ss, qs, cs, seqnum = calStatistics(splitdf, stares, "original train+valid")
     print(
-        f"train+valid original interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
-    split_seqs = generate_sequences(
-        splitdf, effective_keys, min_seq_len, maxlen)
-    ins, ss, qs, cs, seqnum = calStatistics(
-        split_seqs, stares, "train+valid sequences")
+        f"train+valid original interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
+    split_seqs = generate_sequences(splitdf, effective_keys, min_seq_len, maxlen)
+    ins, ss, qs, cs, seqnum = calStatistics(split_seqs, stares, "train+valid sequences")
     print(
-        f"train+valid sequences interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
-    split_seqs.to_csv(os.path.join(
-        dname, "train_valid_sequences.csv"), index=None)
+        f"train+valid sequences interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
+    split_seqs.to_csv(os.path.join(dname, "train_valid_sequences.csv"), index=None)
     # print(f"split seqs dtypes: {split_seqs.dtypes}")
 
     # add default fold -1 to test!
     test_df["fold"] = [-1] * test_df.shape[0]
-    test_df['cidxs'] = get_inter_qidx(test_df)  # add index
-    test_seqs = generate_sequences(test_df, list(
-        effective_keys) + ['cidxs'], min_seq_len, maxlen)
+    test_df["cidxs"] = get_inter_qidx(test_df)  # add index
+    test_seqs = generate_sequences(
+        test_df, list(effective_keys) + ["cidxs"], min_seq_len, maxlen
+    )
     ins, ss, qs, cs, seqnum = calStatistics(test_df, stares, "test original")
     print(
-        f"original test interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
-    ins, ss, qs, cs, seqnum = calStatistics(
-        test_seqs, stares, "test sequences")
+        f"original test interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
+    ins, ss, qs, cs, seqnum = calStatistics(test_seqs, stares, "test sequences")
     print(
-        f"test sequences interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
-    print("="*20)
+        f"test sequences interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
+    print("=" * 20)
 
     test_window_seqs = generate_window_sequences(
-        test_df, list(effective_keys) + ['cidxs'], maxlen)
+        test_df, list(effective_keys) + ["cidxs"], maxlen
+    )
     flag, test_question_seqs = generate_question_sequences(
-        test_df, effective_keys, False, min_seq_len, maxlen)
+        test_df, effective_keys, False, min_seq_len, maxlen
+    )
     flag, test_question_window_seqs = generate_question_sequences(
-        test_df, effective_keys, True, min_seq_len, maxlen)
+        test_df, effective_keys, True, min_seq_len, maxlen
+    )
 
-    test_df = test_df[config+['cidxs']]
+    test_df = test_df[config + ["cidxs"]]
 
     test_df.to_csv(os.path.join(dname, "test.csv"), index=None)
     test_seqs.to_csv(os.path.join(dname, "test_sequences.csv"), index=None)
-    test_window_seqs.to_csv(os.path.join(
-        dname, "test_window_sequences.csv"), index=None)
+    test_window_seqs.to_csv(
+        os.path.join(dname, "test_window_sequences.csv"), index=None
+    )
 
-    ins, ss, qs, cs, seqnum = calStatistics(
-        test_window_seqs, stares, "test window")
+    ins, ss, qs, cs, seqnum = calStatistics(test_window_seqs, stares, "test window")
     print(
-        f"test window interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
+        f"test window interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+    )
 
     if flag:
-        test_question_seqs.to_csv(os.path.join(
-            dname, "test_question_sequences.csv"), index=None)
-        test_question_window_seqs.to_csv(os.path.join(
-            dname, "test_question_window_sequences.csv"), index=None)
+        test_question_seqs.to_csv(
+            os.path.join(dname, "test_question_sequences.csv"), index=None
+        )
+        test_question_window_seqs.to_csv(
+            os.path.join(dname, "test_question_window_sequences.csv"), index=None
+        )
 
         ins, ss, qs, cs, seqnum = calStatistics(
-            test_question_seqs, stares, "test question")
+            test_question_seqs, stares, "test question"
+        )
         print(
-            f"test question interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
+            f"test question interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+        )
         ins, ss, qs, cs, seqnum = calStatistics(
-            test_question_window_seqs, stares, "test question window")
+            test_question_window_seqs, stares, "test question window"
+        )
         print(
-            f"test question window interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}")
+            f"test question window interactions num: {ins}, select num: {ss}, qs: {qs}, cs: {cs}, seqnum: {seqnum}"
+        )
 
-    write_config(dataset_name=dataset_name, dkeyid2idx=dkeyid2idx, effective_keys=effective_keys,
-                 configf=configf, dpath=dname, k=kfold, min_seq_len=min_seq_len, maxlen=maxlen, flag=flag)
+    write_config(
+        dataset_name=dataset_name,
+        dkeyid2idx=dkeyid2idx,
+        effective_keys=effective_keys,
+        configf=configf,
+        dpath=dname,
+        k=kfold,
+        min_seq_len=min_seq_len,
+        maxlen=maxlen,
+        flag=flag,
+    )
 
-    print("="*20)
+    print("=" * 20)
     print("\n".join(stares))
