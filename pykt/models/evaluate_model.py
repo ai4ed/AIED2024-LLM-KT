@@ -103,7 +103,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 dcur, dgaps = data
             elif model_name in ["bakt_time"]:
                 dcur, dgaps = data
-            elif model_name in ["gpt4kt","spkt"] and model.emb_type.find("pt") != -1:
+            elif model_name in ["llmkt","llmkt"] and model.emb_type.find("pt") != -1:
                 dcur, dgaps = data
             else:
                 dcur = data
@@ -111,7 +111,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
             qshft, cshft, rshft = dcur["shft_qseqs"], dcur["shft_cseqs"], dcur["shft_rseqs"]
             m, sm = dcur["masks"], dcur["smasks"]
             q, c, r, qshft, cshft, rshft, m, sm = q.to(device), c.to(device), r.to(device), qshft.to(device), cshft.to(device), rshft.to(device), m.to(device), sm.to(device)
-            if model.model_name in que_type_models and model.model_name not in ["lpkt", "gnn4kt", "gpt4kt","spkt"]:
+            if model.model_name in que_type_models and model.model_name not in ["lpkt", "gnn4kt", "llmkt","llmkt"]:
                 model.module.eval()
             else:
                 model.eval()
@@ -153,7 +153,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 else:
                     y = model(dcur, attn_cnt_path=attn_cnt_path)
                 y = y[:,1:]
-            elif model_name in ["gpt4kt","spkt"]:
+            elif model_name in ["llmkt","llmkt"]:
                 if model.emb_type.find("pt") != -1:
                     y = model(dcur, dgaps=dgaps)
                 else:
@@ -201,7 +201,7 @@ def evaluate_testset(model, test_loader, model_name, save_path="", dataset_name=
                 # csm = torch.cat((dcur["smasks"][:,0:1], dcur["smasks"]), dim=1)
                 y = model(cc.long(), cq.long(), ct.long(), cr.long())#, csm.long())
                 y = y[:, 1:]
-            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt","spkt"]:
+            elif model_name in que_type_models and model_name not in ["lpkt", "llmkt", "gnn4kt","llmkt"]:
                 y = model.module.predict_one_step(data)
                 c,cshft = q,qshft#question level 
             # print(f"after y: {y.shape}")
@@ -252,7 +252,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 dcur, dgaps = data
             elif model_name in ["bakt_time"]:
                 dcur, dgaps = data
-            elif model_name in ["gpt4kt","spkt"] and model.module.emb_type.find("pt") != -1:
+            elif model_name in ["llmkt","llmkt"] and model.module.emb_type.find("pt") != -1:
                 dcur, dgaps = data
             else:
                 dcur = data
@@ -260,7 +260,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
             qshft, cshft, rshft = dcur["shft_qseqs"], dcur["shft_cseqs"], dcur["shft_rseqs"]
             m, sm = dcur["masks"], dcur["smasks"]
             q, c, r, qshft, cshft, rshft, m, sm = q.to(device), c.to(device), r.to(device), qshft.to(device), cshft.to(device), rshft.to(device), m.to(device), sm.to(device)
-            if model.module.model_name in que_type_models and model.module.model_name not in ["lpkt", "gnn4kt", "gpt4kt","spkt"]:
+            if model.module.model_name in que_type_models and model.module.model_name not in ["lpkt", "gnn4kt", "llmkt","llmkt"]:
                 model.module.eval()
             else:
                 model.module.eval()
@@ -302,7 +302,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 else:
                     y = model(dcur, attn_cnt_path=attn_cnt_path)
                 y = y[:,1:]
-            elif model_name in ["gpt4kt","spkt"]:
+            elif model_name in ["llmkt","llmkt"]:
                 if model.module.emb_type.find("pt") != -1:
                     y = model(dcur, dgaps=dgaps)
                 else:
@@ -350,7 +350,7 @@ def evaluate(model, test_loader, model_name, save_path="", dataset_name="", fold
                 # csm = torch.cat((dcur["smasks"][:,0:1], dcur["smasks"]), dim=1)
                 y = model(cc.long(), cq.long(), ct.long(), cr.long())#, csm.long())
                 y = y[:, 1:]
-            elif model_name in que_type_models and model_name not in ["lpkt", "gpt4kt", "gnn4kt","spkt"]:
+            elif model_name in que_type_models and model_name not in ["lpkt", "llmkt", "gnn4kt","llmkt"]:
                 y = model.module.predict_one_step(data)
                 c,cshft = q,qshft#question level 
             # print(f"after y: {y.shape}")

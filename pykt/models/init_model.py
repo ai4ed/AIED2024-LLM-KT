@@ -2,8 +2,7 @@ import torch
 import numpy as np
 import os
 from torch.nn.parallel import DistributedDataParallel as DDP
-from .gpt4kt import GPT4KT
-from .spkt import SPKT
+from .llmkt import LLMKT
 from collections import OrderedDict
 from torch import nn
 from torch.distributed.fsdp import (
@@ -35,14 +34,14 @@ def init_model(
     mode="train",
     train_start=True,
 ):
-    if model_name == "gpt4kt":
+    if model_name == "llmkt":
         # 2） 配置每个进程的gpu
         # if mode == "train" and train_start:
         #     print(f"init torch.distributed.init_process_group")
         #     # torch.distributed.init_process_group(backend='nccl')
         #     # torch.cuda.set_device(args.local_rank)
         if emb_type.find("pt") == -1:
-            model = GPT4KT(
+            model = LLMKT(
                 data_config["num_c"],
                 data_config["num_q"],
                 **model_config,
@@ -50,7 +49,7 @@ def init_model(
                 emb_path=data_config["emb_path"],
             ).to(device)
         else:
-            model = GPT4KT(
+            model = LLMKT(
                 data_config["num_c"],
                 data_config["num_q"],
                 **model_config,
@@ -61,53 +60,7 @@ def init_model(
         print(f"mode:{mode}")
         if mode == "train" and train_start:
             # ref https://pytorch.org/docs/1.13/fsdp.html?highlight=how+fsdp+works
-            ignored_modules = [model.que_emb,model.emb_c, model.model.position_emb]
-
-            def my_auto_wrap_policy(
-                module: nn.Module, recurse: bool, nonwrapped_numel: int
-            ) -> bool:
-                # 对其它层使用默认的自动包装策略
-                return size_based_auto_wrap_policy(
-                    module, recurse, nonwrapped_numel, min_num_params=1
-                )
-
-            # model = DDP(model)
-            ignored_dropouts = {
-                module for module in model.modules() if isinstance(module, Dropout)
-            }
-            ignored_modules += ignored_dropouts
-            model = FSDP(
-                model,
-                auto_wrap_policy=my_auto_wrap_policy,
-                ignored_modules=ignored_modules,
-            )
-    elif model_name == "spkt":
-        # 2） 配置每个进程的gpu
-        # if mode == "train" and train_start:
-        #     print(f"init torch.distributed.init_process_group")
-        #     # torch.distributed.init_process_group(backend='nccl')
-        #     # torch.cuda.set_device(args.local_rank)
-        if emb_type.find("pt") == -1:
-            model = SPKT(
-                data_config["num_c"],
-                data_config["num_q"],
-                **model_config,
-                emb_type=emb_type,
-                emb_path=data_config["emb_path"],
-            ).to(device)
-        else:
-            model = SPKT(
-                data_config["num_c"],
-                data_config["num_q"],
-                **model_config,
-                emb_type=emb_type,
-                emb_path=data_config["emb_path"],
-                num_sgap=data_config["num_sgap"],
-            ).to(device)
-        print(f"mode:{mode}")
-        if mode == "train" and train_start:
-            # ref https://pytorch.org/docs/1.13/fsdp.html?highlight=how+fsdp+works
-            ignored_modules = [model.emb_q, model.model.position_emb,model.emb_c]
+            ignored_modules = [model.emb_q, model.model.position_emb, model.emb_c]
 
             def my_auto_wrap_policy(
                 module: nn.Module, recurse: bool, nonwrapped_numel: int

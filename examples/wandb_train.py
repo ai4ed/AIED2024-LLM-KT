@@ -98,7 +98,7 @@ def main(params, args=None):
     with open("../configs/kt_config.json") as f:
         config = json.load(f)
         train_config = config["train_config"]
-        if model_name in ["gpt4kt","spkt"]:
+        if model_name in ["llmkt"]:
             seqlen = params["seq_len"]
             train_config["seq_len"] = seqlen
             if seqlen == 1024:
@@ -126,7 +126,7 @@ def main(params, args=None):
                 train_config["batch_size"] = 32  ## because of OOM
 
         model_config = copy.deepcopy(params)
-        if model_name in ["gpt4kt", "spkt"]:
+        if model_name in ["llmkt"]:
             for key in [
                 "model_name",
                 "dataset_name",
@@ -159,12 +159,12 @@ def main(params, args=None):
     rank0_print("Start init data")
     rank0_print(dataset_name, model_name, data_config, fold, batch_size)
 
-    if model_name not in ["simplekt_sr", "parkt", "gpt4kt", "simplekt","spkt"]:
+    if model_name not in ["simplekt_sr", "parkt", "llmkt", "simplekt"]:
         train_loader, valid_loader, curtrain = init_dataset4train(
             dataset_name, model_name, emb_type, data_config, fold, batch_size
         )
         # print(f"curtrain:{len(curtrain)}")
-    elif model_name in ["gpt4kt","spkt"]:
+    elif model_name in ["llmkt"]:
         not_select_dataset = params["not_select_dataset"]
         if not_select_dataset == "all":
             not_select_dataset = None
@@ -192,8 +192,8 @@ def main(params, args=None):
     ckpt_path = os.path.join(save_dir, params_str)
     if not os.path.isdir(ckpt_path) and local_rank == 0 and node_rank==0: 
         os.makedirs(ckpt_path)
-    # 不在0号卡不保存 
-    if model_name in ["spkt","gpt4kt"] and local_rank != 0 and node_rank != 0:
+    # 不在0号卡不保存
+    if model_name in ["llmkt"] and local_rank != 0 and node_rank != 0:
         ckpt_path = None
 
     rank0_print(
@@ -232,7 +232,7 @@ def main(params, args=None):
 
     rank0_print(f"model_name:{model_name}")
 
-    if model_name in ["gpt4kt","spkt"]:
+    if model_name in ["llmkt"]:
         pretrain_path = params["pretrain_path"]
         if pretrain_path == "":
             del model_config["pretrain_path"]
@@ -292,7 +292,7 @@ def main(params, args=None):
 
     rank0_print("Start training")
 
-    if model_name in ["gpt4kt","spkt"]:
+    if model_name in ["llmkt"]:
         global_bs = params["global_bs"]
         num_gpus = params["num_gpus"]
         num_workers = params["num_workers"]
@@ -327,7 +327,7 @@ def main(params, args=None):
     rank0_print("Training finished")
 
     if save_model:
-        if model_name in ["gpt4kt","spkt"]:
+        if model_name in ["llmkt"]:
             best_model = init_model(
                 model_name,
                 model_config,

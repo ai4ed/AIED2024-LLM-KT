@@ -35,7 +35,7 @@ def main(params):
             train_config = config["train_config"]
             seq_len = train_config["seq_len"]
             model_config["seq_len"] = seq_len   
-        # if model_name in ["gpt4kt"]:
+        # if model_name in ["llmkt"]:
         #     model_config["final_fc_dim"] = 512
         #     model_config["final_fc_dim2"] = 1024
         #     model_config["nheads"] = 16
@@ -52,7 +52,7 @@ def main(params):
 
     with open("../configs/data_config.json") as fin:
         curconfig = copy.deepcopy(json.load(fin))
-        if model_name in ["gpt4kt","llmkt"]:
+        if model_name in ["llmkt","llmkt"]:
             dataset_name = params["dataset_name"]
         data_config = curconfig[dataset_name]
         data_config["dataset_name"] = dataset_name
@@ -64,7 +64,7 @@ def main(params):
             print("running  prediction")
             data_config["num_at"] = config["data_config"]["num_at"]
             data_config["num_it"] = config["data_config"]["num_it"] 
-        elif model_name in ["gpt4kt","llmkt"]:
+        elif model_name in ["llmkt","llmkt"]:
             data_config["num_q"] = config["data_config"]["num_q"]
             data_config["num_c"] = config["data_config"]["num_c"] 
     
@@ -108,7 +108,7 @@ def main(params):
         # print(f"testauc: {testauc}, testacc: {testacc}, window_testauc: {window_testauc}, window_testacc: {window_testacc}")
         print(f"window_testauc: {window_testauc}, window_testacc: {window_testacc}")
     
-    if model_name in ["gpt4kt","llmkt"]:
+    if model_name in ["llmkt","llmkt"]:
         save_test_window_path = os.path.join(save_dir, model.emb_type+"_test_window_predictions_pretrain.txt")
         window_testauc, window_testacc = evaluate_testset(model, test_window_loader, model_name, save_test_window_path, dataset_name, fold)
         # print(f"testauc: {testauc}, testacc: {testacc}, window_testauc: {window_testauc}, window_testacc: {window_testacc}")

@@ -101,6 +101,13 @@
         "time_log": 2
     },
     "dimkt":{
-        "dropout":0.2  
+        "dropout":0.2
+    },
+    "llmkt": {
+        "learning_rate": 1e-4,
+        "d_model": 256,
+        "n_blocks": 4,
+        "dropout": 0.1,
+        "d_ff": 256
     }
 }

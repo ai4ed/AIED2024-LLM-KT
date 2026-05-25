@@ -35,7 +35,7 @@ def rank0_print(*args):
 def cal_loss(model, ys, r, rshft, sm, preloss=[]):
     model_name = model.module.model_name
 
-    if model_name in ["gpt4kt","spkt"]:
+    if model_name in ["llmkt","llmkt"]:
         y = torch.masked_select(ys[0], sm)
         t = torch.masked_select(rshft, sm)
         print(f"y: {y.shape}")
@@ -74,7 +74,7 @@ def model_forward(model, data, attn_grads=None):
         or model.module.emb_type.find("time") != -1
     ):
         dcur, dgaps = data
-    elif model_name in ["gpt4kt","spkt"] and model.module.emb_type.find("pt") != -1:
+    elif model_name in ["llmkt","llmkt"] and model.module.emb_type.find("pt") != -1:
         dcur, dgaps = data
     else:
         dcur = data
@@ -116,7 +116,7 @@ def model_forward(model, data, attn_grads=None):
     cr = torch.cat((r[:, 0:1], rshft), dim=1)
     if model_name in ["hawkes"]:
         ct = torch.cat((t[:, 0:1], tshft), dim=1)
-    elif model_name in ["gpt4kt","spkt"]:
+    elif model_name in ["llmkt","llmkt"]:
         if model.module.emb_type == "qid":
             y, y2, y3 = model(dcur, train=True)
         elif model.module.emb_type.find("pt") == -1:
